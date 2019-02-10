@@ -12,9 +12,15 @@ def start():
         (r"/", WebSocketHandler),
     ], debug = True)
     app.listen(8888)
+    logger.debug('WebSockets listening on port 8888')
     tornado.ioloop.IOLoop.current().start()
 
+def emit(message):
+    WebSocketHandler.send_message(message)
+
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
+    waiters = set()
+
     def open(self):
         logger.debug(
             'New WebSocket connection from %s',
@@ -28,6 +34,15 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             'Closed WebSocket connection from %s',
             self.request.remote_ip)
 
+    @classmethod
+    def send_message(cls, message):
+        logging.debug("Sending message to %d waiter(s)", len(cls.waiters))
+        for waiter in cls.waiters:
+            try:
+                waiter.write_message(message)
+            except:
+                logging.error("Error sending message", exc_info=True)
+
     def on_message(self, message):
         if not message:
             return
@@ -39,4 +54,4 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         response = JSONRPCResponseManager.handle(
             message, dispatcher)
 
-        self.write_message(response.json)
+        WebSocketHandler.send_message(response.json)
